@@ -1,0 +1,7 @@
+# As imagens do README vão aqui. Nomes esperados:
+#   overview.png       - popup inteiro aberto
+#   install.png        - chrome://extensions com a extensão carregada
+#   dominio.png        - área de configuração (campo de domínio + botão 🎯)
+#   linha-arquivo.png  - uma linha de arquivo (badge, URL, toggle, ícones)
+#   html-opts.png      - linha de HTML (seletor + posição)
+#   auto-reload.png    - toggles Auto-injetar / Auto-reload + intervalo

@@ -1,0 +1,21 @@
+# Dependências
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Pacotes gerados
+*.zip
+*.crx
+*.pem

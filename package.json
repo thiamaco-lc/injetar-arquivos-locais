@@ -1,0 +1,17 @@
+{
+  "name": "injetar-arquivos-locais",
+  "version": "2.0.0",
+  "description": "Extensão Chrome/Edge (MV3) para injetar arquivos CSS, JS e HTML em qualquer página, por URL ou do disco, com auto-detecção de tipo e auto-reload para gulp.",
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "css-injection",
+    "js-injection",
+    "html-injection",
+    "livereload",
+    "gulp",
+    "frontend"
+  ],
+  "author": "thiamaco-lc",
+  "license": "MIT"
+}
