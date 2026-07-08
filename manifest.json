@@ -7,8 +7,6 @@
     "activeTab",
     "scripting",
     "storage",
-    "unlimitedStorage",
-    "userScripts",
     "tabs"
   ],
   "background": {

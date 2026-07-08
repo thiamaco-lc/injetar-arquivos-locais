@@ -3,32 +3,49 @@
 //  Centraliza a injeção de CSS/JS/HTML e o watcher de auto-reload (gulp watch).
 // ============================================================================
 
-const CONFIG_KEYS = [
-  "itens",
-  "habilitado",
-  "autoInject",
-  "autoReload",
-  "baseDomain",
-  "intervalo",
-];
-
-// --- Migração do formato antigo ({ arquivos: [{tipo,url,ativo}] }) -----------
+// --- Migração para o formato de perfis por domínio --------------------------
+//  perfis: { [dominio]: { itens, autoInject, autoReload, intervalo } }
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.get(["arquivos", "itens"], (r) => {
-    if (r.itens) return; // já migrado
-    if (Array.isArray(r.arquivos)) {
-      const itens = r.arquivos.map((a) => ({
-        id: gerarId(),
-        tipo: a.tipo || detectarTipo(a.url) || "css",
-        url: a.url || "",
-        conteudo: "",
-        nome: "",
-        seletor: "body",
-        posicao: "append",
-        ativo: a.ativo !== false,
-      }));
-      chrome.storage.local.set({ itens });
+  chrome.storage.local.get(null, (r) => {
+    if (r.perfis) return; // já migrado
+
+    let itens = Array.isArray(r.itens)
+      ? r.itens
+      : Array.isArray(r.arquivos)
+      ? r.arquivos.map((a) => ({
+          id: gerarId(),
+          tipo: a.tipo || detectarTipo(a.url) || "",
+          tipoManual: !!a.tipo,
+          url: a.url || "",
+          seletor: "body",
+          posicao: "append",
+          ativo: a.ativo !== false,
+        }))
+      : [];
+
+    const perfis = {};
+    if (itens.length) {
+      perfis[r.baseDomain || ""] = {
+        itens,
+        autoInject: r.autoInject !== false,
+        autoReload: !!r.autoReload,
+        intervalo: Number(r.intervalo) || 1000,
+      };
     }
+
+    chrome.storage.local.set({
+      perfis,
+      dominioAtual: r.baseDomain || "",
+      habilitado: r.habilitado !== false,
+    });
+    chrome.storage.local.remove([
+      "itens",
+      "arquivos",
+      "baseDomain",
+      "autoInject",
+      "autoReload",
+      "intervalo",
+    ]);
   });
 });
 
@@ -64,55 +81,32 @@ function ehPaginaInterna(url) {
   );
 }
 
-// --- Ponto único de aplicação -----------------------------------------------
-function aplicarNaAba(tabId, forcar) {
-  chrome.storage.local.get(CONFIG_KEYS, (cfg) => {
-    const payload = {
-      itens: cfg.itens || [],
-      habilitado: cfg.habilitado !== false,
-      autoReload: !!cfg.autoReload,
-      intervalo: Number(cfg.intervalo) || 1000,
-      forcar: !!forcar,
-    };
-    chrome.scripting
-      .executeScript({
-        target: { tabId },
-        func: aplicarNaPagina,
-        args: [payload],
-      })
-      .then(() => injetarJsLocais(tabId, payload))
-      .catch((e) => console.warn("[ext] executeScript falhou:", e.message));
-  });
+// Encontra o perfil cujo domínio corresponde à URL da aba.
+function perfilParaUrl(url, perfis) {
+  for (const dominio of Object.keys(perfis || {})) {
+    if (dominio && urlNoDominioBase(url, dominio)) {
+      return { dominio, perfil: perfis[dominio] };
+    }
+  }
+  return null;
 }
 
-// JS vindo de arquivo do disco: injeta o código via chrome.userScripts, que
-// roda no mundo MAIN e NÃO é bloqueado pelo CSP da página (blob:/inline são).
-// Requer a permissão "userScripts" + o toggle "Permitir user scripts" ligado
-// na página de detalhes da extensão.
-function injetarJsLocais(tabId, payload) {
-  if (!payload.habilitado) return;
-  if (!chrome.userScripts) return; // API indisponível ou toggle desligado
-  const jsLocais = (payload.itens || []).filter(
-    (i) => i.ativo && i.tipo === "js" && i.conteudo
-  );
-  jsLocais.forEach((i) => {
-    try {
-      chrome.userScripts
-        .execute({
-          target: { tabId },
-          js: [{ code: i.conteudo }],
-          world: "MAIN",
-        })
-        .catch((e) =>
-          console.warn(
-            '[ext] userScripts falhou (ligue "Permitir user scripts" nos detalhes da extensão ou use a URL do arquivo):',
-            e.message
-          )
-        );
-    } catch (e) {
-      console.warn("[ext] chrome.userScripts indisponível:", e.message);
-    }
-  });
+// --- Ponto único de aplicação -----------------------------------------------
+function aplica(tabId, perfil, habilitado, forcar) {
+  const payload = {
+    itens: perfil.itens || [],
+    habilitado: habilitado !== false,
+    autoReload: !!perfil.autoReload,
+    intervalo: Number(perfil.intervalo) || 1000,
+    forcar: !!forcar,
+  };
+  chrome.scripting
+    .executeScript({
+      target: { tabId },
+      func: aplicarNaPagina,
+      args: [payload],
+    })
+    .catch((e) => console.warn("[ext] executeScript falhou:", e.message));
 }
 
 // ============================================================================
@@ -137,26 +131,17 @@ function aplicarNaPagina(payload) {
     if (!item.ativo) return;
     const { id, tipo } = item;
     const url = item.url || "";
-    const conteudo = item.conteudo || "";
+    if (!url) return;
     if (document.querySelector("[" + MARCA + '="' + id + '"]')) return; // já presente
 
     try {
       if (tipo === "css") {
-        let el;
-        if (conteudo) {
-          el = document.createElement("style");
-          el.textContent = conteudo;
-        } else {
-          el = document.createElement("link");
-          el.rel = "stylesheet";
-          el.href = url;
-        }
+        const el = document.createElement("link");
+        el.rel = "stylesheet";
+        el.href = url;
         el.setAttribute(MARCA, id);
         document.head.appendChild(el);
       } else if (tipo === "js") {
-        // JS de arquivo local (conteudo) é injetado via chrome.userScripts no
-        // background — blob:/inline são bloqueados por CSP estrito. Aqui só URL.
-        if (conteudo) return;
         const s = document.createElement("script");
         s.src = url;
         s.async = false;
@@ -183,14 +168,10 @@ function aplicarNaPagina(payload) {
             alvo.appendChild(wrap);
           }
         };
-        if (conteudo) {
-          inserir(conteudo);
-        } else if (url) {
-          chrome.runtime.sendMessage({ action: "buscar", url }, (resp) => {
-            if (chrome.runtime.lastError) return;
-            if (resp && resp.texto != null) inserir(resp.texto);
-          });
-        }
+        chrome.runtime.sendMessage({ action: "buscar", url }, (resp) => {
+          if (chrome.runtime.lastError) return;
+          if (resp && resp.texto != null) inserir(resp.texto);
+        });
       }
     } catch (e) {
       console.warn("[ext] injeção falhou:", item, e);
@@ -204,7 +185,7 @@ function aplicarNaPagina(payload) {
   }
   if (payload.autoReload) {
     const alvos = itens
-      .filter((i) => i.ativo && !i.conteudo && /^https?:/i.test(i.url || ""))
+      .filter((i) => i.ativo && /^https?:/i.test(i.url || ""))
       .map((i) => ({ id: i.id, url: i.url, tipo: i.tipo }));
 
     if (alvos.length) {
@@ -263,12 +244,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse?.({ ok: false, motivo: "pagina-interna" });
         return;
       }
-      verificarDominio(tab.url, (ok, motivo) => {
-        if (!ok) {
-          sendResponse?.({ ok: false, motivo });
+      chrome.storage.local.get(["perfis", "habilitado"], ({ perfis, habilitado }) => {
+        const match = perfilParaUrl(tab.url, perfis || {});
+        if (!match) {
+          const temPerfis = Object.keys(perfis || {}).some((k) => k);
+          sendResponse?.({ ok: false, motivo: temPerfis ? "fora-dominio" : "sem-dominio" });
           return;
         }
-        aplicarNaAba(tab.id, msg.forcar !== false);
+        aplica(tab.id, match.perfil, habilitado, msg.forcar !== false);
         sendResponse?.({ ok: true });
       });
     });
@@ -300,15 +283,6 @@ async function buscarRecurso(u) {
   return { texto, assinatura };
 }
 
-// A extensão só age quando há um domínio base definido E a aba pertence a ele.
-function verificarDominio(url, cb) {
-  chrome.storage.local.get("baseDomain", ({ baseDomain }) => {
-    if (!baseDomain) return cb(false, "sem-dominio");
-    if (!urlNoDominioBase(url, baseDomain)) return cb(false, "fora-dominio");
-    cb(true, null);
-  });
-}
-
 // Reinjeta ao trocar de aba (se dentro do domínio base).
 chrome.tabs.onActivated.addListener(async (info) => {
   try {
@@ -328,10 +302,10 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 function disparaAuto(tabId, url) {
   if (ehPaginaInterna(url)) return;
-  chrome.storage.local.get(["autoInject", "baseDomain"], ({ autoInject, baseDomain }) => {
-    if (autoInject === false) return; // auto-inject desligado
-    if (!baseDomain) return; // sem domínio base => não injeta em nenhum site
-    if (!urlNoDominioBase(url, baseDomain)) return; // fora do domínio
-    aplicarNaAba(tabId, false);
+  chrome.storage.local.get(["perfis", "habilitado"], ({ perfis, habilitado }) => {
+    const match = perfilParaUrl(url, perfis || {}); // busca perfil do domínio
+    if (!match) return; // nenhum perfil para este site
+    if (match.perfil.autoInject === false) return; // auto-inject desligado no perfil
+    aplica(tabId, match.perfil, habilitado, false);
   });
 }

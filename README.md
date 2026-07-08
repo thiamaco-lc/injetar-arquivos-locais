@@ -1,6 +1,6 @@
 # Injetar Arquivos Locais
 
-Extensão para **Chrome / Edge** (Manifest V3) que injeta arquivos **CSS, JS e HTML** em qualquer página — por **URL** (ex: seu servidor local do `gulp`) ou escolhendo o **arquivo do disco**. Ideal para desenvolver e testar mudanças direto em um site em produção sem precisar de deploy.
+Extensão para **Chrome / Edge** (Manifest V3) que injeta arquivos **CSS, JS e HTML** em qualquer página, por **URL** (ex: seu servidor local do `gulp`). Ideal para desenvolver e testar mudanças direto em um site em produção sem precisar de deploy.
 
 - ✅ **Auto-detecção de tipo** pela extensão do arquivo (`.css`, `.js`, `.html`) — sem escolher manualmente
 - ✅ **Injeção de HTML** em qualquer seletor CSS da página (no fim, no início ou substituindo)
@@ -30,7 +30,7 @@ Extensão para **Chrome / Edge** (Manifest V3) que injeta arquivos **CSS, JS e H
 5. Fixe a extensão na barra para acesso rápido.
 
 <!-- IMAGEM: página chrome://extensions com a extensão carregada -->
-![Extensão carregada](docs/images/install.png)
+<!-- ![Extensão carregada](docs/images/install.png) -->
 
 ---
 
@@ -42,8 +42,10 @@ A extensão **só injeta no domínio que você definir** — sem domínio, ela n
 
 - Digite o domínio (ex: `http://localhost:3000`) **ou** clique no **🎯** para preencher com o domínio da aba atual.
 
+> 🗂️ **Cada domínio tem seu próprio perfil.** Os arquivos e as configurações (auto-inject, auto-reload) são salvos **por domínio**. Ao trocar o domínio, a lista recarrega os arquivos daquele domínio — nada é compartilhado entre sites diferentes. Ao abrir o popup, ele já mostra o perfil do site da aba atual.
+
 <!-- IMAGEM: área de configuração destacando o campo de domínio e o botão 🎯 -->
-![Domínio base](docs/images/dominio.png)
+<!-- ![Domínio base](docs/images/dominio.png) -->
 
 ### 2. Adicione os arquivos
 
@@ -60,7 +62,7 @@ Clique em **+ Campo** e cole a URL do arquivo. O **tipo é detectado automaticam
 - O **toggle** de cada linha ativa/desativa aquele arquivo individualmente.
 
 <!-- IMAGEM: uma linha de arquivo destacando badge de tipo, campo de URL, toggle e ícones -->
-![Linha de arquivo](docs/images/linha-arquivo.png)
+<!-- ![Linha de arquivo](docs/images/linha-arquivo.png) -->
 
 ### 3. Injeção de HTML com seletor
 
@@ -70,20 +72,15 @@ Quando o tipo é **HTML**, aparecem campos extras:
 - **Onde** — `no fim`, `no início` ou `substituir` o conteúdo do alvo.
 
 <!-- IMAGEM: linha de HTML mostrando o campo de seletor e o select de posição -->
-![Opções de HTML](docs/images/html-opts.png)
+<!-- ![Opções de HTML](docs/images/html-opts.png) -->
 
-### 4. Arquivo do disco (📁)
+> 💡 Os arquivos são sempre referenciados por **URL** (ex: `http://localhost:3000/...`), servida pelo seu ambiente local (`gulp`, `webpack`, etc.). Isso funciona com o CSP dos sites e habilita o auto-reload.
 
-Em vez de uma URL, você pode escolher um arquivo local pelo botão **📁**. O conteúdo é lido e guardado na extensão.
-
-> ⚠️ **Para arquivos `.js` do disco**, o Chrome exige ligar o toggle **"Permitir user scripts"** na página de detalhes da extensão (necessário por causa do CSP das páginas). Para CSS e HTML não é preciso.
-> 💡 No fluxo com `gulp`/servidor local, prefira a **URL** (`http://localhost:3000/...`) — funciona sem esse toggle e habilita o auto-reload.
-
-### 5. Auto-injetar no domínio
+### 4. Auto-injetar no domínio
 
 Com **Auto-injetar no domínio** ligado, os arquivos são reinjetados sozinhos toda vez que você abrir ou recarregar uma página do domínio base.
 
-### 6. Auto-reload (gulp watch)
+### 5. Auto-reload (gulp watch)
 
 Ligue o **Auto-reload** para a extensão observar os arquivos servidos (URLs `http`/`https`) e reagir quando o `gulp` recompilar:
 
@@ -93,7 +90,7 @@ Ligue o **Auto-reload** para a extensão observar os arquivos servidos (URLs `ht
 Ajuste o intervalo de verificação em milissegundos (padrão `1000`).
 
 <!-- IMAGEM: área de configuração destacando os toggles Auto-injetar e Auto-reload + intervalo -->
-![Auto-reload](docs/images/auto-reload.png)
+<!-- ![Auto-reload](docs/images/auto-reload.png) -->
 
 ---
 
@@ -119,9 +116,9 @@ Ajuste o intervalo de verificação em milissegundos (padrão `1000`).
 
 ## ⚙️ Como funciona (resumo técnico)
 
-- **`popup.html` / `popup.js`** — interface e configuração (salva em `chrome.storage.local`).
+- **`popup.html` / `popup.js`** — interface e configuração (salva em `chrome.storage.local`, um perfil por domínio).
 - **`background.js`** (service worker) — centraliza a injeção e faz os `fetch` de arquivos (evita CORS entre a página e o `localhost`), além de rodar o watcher do auto-reload.
-- JS de arquivo local é injetado via `chrome.userScripts` para contornar o CSP da página; JS por URL usa `<script src>`.
+- CSS entra como `<link>`, JS como `<script src>` e HTML é buscado e inserido no seletor escolhido.
 
 ---
 
@@ -130,10 +127,8 @@ Ajuste o intervalo de verificação em milissegundos (padrão `1000`).
 | Permissão          | Para quê                                                        |
 |--------------------|----------------------------------------------------------------|
 | `scripting`        | Injetar CSS/JS/HTML na página                                   |
-| `storage`          | Salvar a configuração dos arquivos                             |
+| `storage`          | Salvar a configuração dos arquivos (por domínio)               |
 | `tabs` / `activeTab` | Saber a aba/URL atual                                        |
-| `userScripts`      | Injetar JS de arquivos locais contornando o CSP                |
-| `unlimitedStorage` | Guardar o conteúdo de arquivos locais grandes                 |
 | `<all_urls>`       | Buscar arquivos e injetar em qualquer domínio que você definir |
 
 ---
