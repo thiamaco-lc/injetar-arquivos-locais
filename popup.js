@@ -52,8 +52,11 @@ $(function () {
   }
 
   // ------------------------------------------------------- persistência ----
+  // salvar() apenas persiste a configuração. A injeção só acontece quando o
+  // usuário clica em "Aplicar agora" (ou via auto-inject do background, se
+  // ligado). Editar/detectar tipo NÃO injeta nada.
   let salvarTimer = null;
-  function salvar(aplicarDepois = true) {
+  function salvar() {
     clearTimeout(salvarTimer);
     salvarTimer = setTimeout(() => {
       // Remove perfis vazios (sem itens) que não sejam o que está em edição.
@@ -68,7 +71,6 @@ $(function () {
         dominioAtual: estado.dominio,
         habilitado: estado.habilitado,
       });
-      if (aplicarDepois) aplicar();
     }, 250);
   }
 
@@ -274,7 +276,7 @@ $(function () {
 
   $("#auto-inject").on("change", function () {
     P().autoInject = this.checked;
-    salvar(false);
+    salvar();
   });
 
   $("#auto-reload").on("change", function () {
@@ -285,7 +287,7 @@ $(function () {
   $("#intervalo").on("input", function () {
     const v = parseInt(this.value, 10);
     P().intervalo = isNaN(v) || v < 100 ? 1000 : v;
-    salvar(false);
+    salvar();
   });
 
   // Trocar o domínio (blur/Enter) carrega o perfil daquele domínio.
@@ -365,7 +367,6 @@ $(function () {
 
       $("#base-domain").val(estado.dominio);
       renderPerfil();
-      aplicar(true);
     });
   });
 });
